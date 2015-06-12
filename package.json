@@ -1,0 +1,40 @@
+{
+  "name": "lru-map",
+  "version": "1.0.0",
+  "description": "An ES6-y Map that evicts entries with an LRU policy",
+  "main": "index.js",
+  "scripts": {
+    "coffeelint": "git ls-files | grep \"\\.coffee$\" | xargs node_modules/.bin/coffeelint -c",
+    "coffee-jshint": "git ls-files | grep \"\\.coffee$\" | xargs node_modules/.bin/coffee-jshint -o node,mocha,loopfunc",
+    "lint": "npm run coffeelint && npm run coffee-jshint",
+    "test": "node_modules/.bin/mocha --compilers coffee:coffee-script/register --recursive test",
+    "check": "npm run test && npm run lint"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bchociej/lru-map.git"
+  },
+  "keywords": [
+    "map",
+    "lru",
+    "es6",
+    "cache"
+  ],
+  "author": "Ben Chociej <ben@chociej.io>",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/bchociej/lru-map/issues"
+  },
+  "homepage": "https://github.com/bchociej/lru-map#readme",
+  "dependencies": {
+    "coffee-script": "^1.9.3",
+    "es6-map": "^0.1.1"
+  },
+  "devDependencies": {
+    "coffee-19-jshint": "^2.3.1",
+    "coffeelint": "^1.10.1",
+    "mocha": "^2.2.5",
+    "mockery": "^1.4.0",
+    "sinon": "^1.15.3"
+  }
+}
