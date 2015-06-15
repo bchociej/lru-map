@@ -9,6 +9,10 @@ describe 'LRUMap', ->
 	beforeEach ->
 		undefined
 
+	describe 'module entry point index.js', ->
+		it 'should export the LRUMap class', ->
+			expect(require('../index.js')).to.be LRUMap
+
 	describe 'constructor', ->
 		it 'constructs an LRUMap', ->
 			expect(new LRUMap).to.be.an LRUMap
