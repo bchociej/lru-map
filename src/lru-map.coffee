@@ -1,16 +1,16 @@
 Map = require 'es6-map'
 
-module.exports = class LRUMap
+module.exports = class LRUMap extends Map
 	constructor: (opts = {}) ->
-		@maxSize = opts.maxSize ? (Infinity)
-		@getSize = opts.getSize ? ((value) -> 1)
+		@_maxSize = opts.maxSize ? (Infinity)
+		@calcSize = opts.calcSize ? ((value) -> 1)
 		@onEvict = opts.onEvict ? ((key, value) -> undefined)
 
-		unless typeof @maxSize is 'number' and @maxSize >= 0
+		unless typeof @_maxSize is 'number' and @_maxSize >= 0
 			throw new Error 'maxSize must be a non-negative number'
 
-		unless typeof @getSize is 'function'
-			throw new TypeError 'getSize must be a function'
+		unless typeof @calcSize is 'function'
+			throw new TypeError 'calcSize must be a function'
 
 		unless typeof @onEvict is 'function'
 			throw new TypeError 'onEvict must be a function'
@@ -18,28 +18,51 @@ module.exports = class LRUMap
 		@_map = new Map
 		@_total = 0
 
-	fits: (value) -> return @getSize(value) <= @maxSize
+	maxSize: (size) ->
+		if size?
+			unless size is 'number' and size >= 0
+				throw new Error 'size must be a non-negative number'
 
-	wouldCauseEviction: (value) -> return @getSize(value) + @total > @maxSize
+			@_maxSize = size
 
-	onEvict: (onEvict) ->
-		unless typeof onEvict is 'function'
-			throw new TypeError 'onEvict must be a function'
+			entries = @_map.entries()
+			while @_total > @_maxSize
+				oldest = entries.next().value
 
-		@onEvict = onEvict
+				break unless oldest?
+
+				@_map.delete oldest[0]
+				@_total -= oldest[1].size
+
+				@onEvict oldest[0], oldest[1].value
+
+		return @_maxSize
+
+	currentSize: ->
+		return @_total
+
+	onEvict: (fn) ->
+		unless typeof fn is 'function'
+			throw new TypeError 'argument to onEvict must be a function'
+
+		@onEvict = fn
+
+	fits: (value) -> return @calcSize(value) <= @_maxSize
+
+	wouldCauseEviction: (value) -> return @calcSize(value) + @total > @_maxSize
 
 	set: (key, value) ->
-		size = @getSize value
+		size = @calcSize value
 
 		if isNaN(size) or size < 0 or typeof size isnt 'number'
-			throw new Error 'getSize() must return a non-negative number'
+			throw new Error 'calcSize() must return a non-negative number'
 
-		if size > @maxSize
-			throw new Error "cannot store an object of that size (maxSize = #{@maxSize}; value size = #{size})"
+		if size > @_maxSize
+			throw new Error "cannot store an object of that size (maxSize = #{@_maxSize}; value size = #{size})"
 
 		entries = @_map.entries()
 
-		while @_total + size > @maxSize
+		while @_total + size > @_maxSize
 			oldest = entries.next().value
 
 			break unless oldest?
