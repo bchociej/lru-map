@@ -135,5 +135,9 @@ module.exports = class LRUMap extends Map
 		}
 
 	forEach: (callback, thisArg) ->
-		@_map.forEach callback, thisArg
+		thisMap = this
+
+		@_map.forEach (value, key, map) ->
+			callback.call thisArg, value.value, key, thisMap
+
 		return
