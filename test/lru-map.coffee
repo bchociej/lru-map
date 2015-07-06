@@ -34,3 +34,38 @@ describe 'LRUMap', ->
 		it 'returns maxSize', ->
 			expect(new LRUMap().maxSize()).to.be Infinity
 			expect(new LRUMap(maxSize: 10).maxSize()).to.be 10
+
+	describe '#forEach', ->
+		it 'calls back with correct parameters', ->
+			lmap = new LRUMap()
+			lmap.set 'foo', 'whizbang'
+			lmap.set 'bar', -Infinity
+			called = false
+
+			lmap.forEach (value, key, map) ->
+				called = true
+
+				if key is 'foo'
+					expect(value).to.be 'whizbang'
+				else if key is 'bar'
+					expect(value).to.be -Infinity
+				else
+					expect().fail 'bad key'
+
+				expect(map).to.be lmap
+
+			expect(called).to.be true
+
+		it 'binds thisArg', ->
+			lmap = new LRUMap()
+			lmap.set 'foo', 'whizbang'
+			called = false
+			someObject = {hi: 'mom'}
+
+			lmap.forEach (value, key, map) ->
+				called = true
+				expect(map).to.be lmap
+				expect(this).to.be someObject
+			, someObject
+
+			expect(called).to.be true
