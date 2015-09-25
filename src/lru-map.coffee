@@ -85,6 +85,14 @@ module.exports = class LRUMap extends Map
 	currentSize: ->
 		return @_total
 
+	# non-mutating; idempotent
+	fits: (value) ->
+		return @_calcSize(value) <= @_maxSize
+
+	# non-mutating; idempotent
+	wouldCauseEviction: (value) ->
+		return @_calcSize(value) + @total > @_maxSize
+
 	# non-mutating configuration method; no immediate effect
 	onEvict: (fn) ->
 		unless typeof fn is 'function'
@@ -106,16 +114,6 @@ module.exports = class LRUMap extends Map
 
 		@_onRemove = fn
 
-	# reaps stales; idempotent as to non-stale entries
-	fits: (value) ->
-		@reapStale()
-		return @_calcSize(value) <= @_maxSize
-
-	# reaps stales; idempotent as to non-stale entries
-	wouldCauseEviction: (value) ->
-		@reapStale()
-		return @_calcSize(value) + @total > @_maxSize
-
 	# reaps stales
 	reapStale: ->
 		return if @_maxAge is Infinity
@@ -125,7 +123,7 @@ module.exports = class LRUMap extends Map
 
 		while cur?
 			diff = (+(new Date) - cur[1].timestamp) / 1000
-			
+
 			if diff > @_maxAge
 				@_map.delete cur[0]
 				@_total -= cur[1].size
@@ -138,7 +136,7 @@ module.exports = class LRUMap extends Map
 			cur = entries.next().value
 
 	# mutates Map state; affects LRU eviction; affects staleness; reaps stales
-	set: (key, value, oldTimestamp = null) ->
+	set: (key, value) ->
 		@reapStale()
 
 		size = @_calcSize value
@@ -212,9 +210,8 @@ module.exports = class LRUMap extends Map
 		entry = @_map.get key
 		return entry?.value
 
-	# non-evicting; reaps stales
+	# non-mutating; idempotent
 	sizeOf: (key) ->
-		@reapStale()
 		entry = @_map.get key
 		return entry?.size
 
