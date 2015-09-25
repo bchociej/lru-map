@@ -1,6 +1,6 @@
 {
   "name": "lru-map",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "An ES6-y Map that evicts entries with an LRU policy",
   "main": "index.js",
   "scripts": {
@@ -8,6 +8,8 @@
     "coffee-jshint": "git ls-files | grep \"\\.coffee$\" | xargs node_modules/.bin/coffee-jshint -o node,mocha,loopfunc",
     "lint": "npm run coffeelint && npm run coffee-jshint",
     "test": "node_modules/.bin/mocha --compilers coffee:coffee-script/register --recursive test",
+    "coverage": "node_modules/.bin/mocha --compilers coffee:coffee-script/register --reporter html-cov --require coverage/init.js --recursive test > coverage/coverage.html && xdg-open coverage/coverage.html",
+    "checkcov": "npm run check && npm run coverage",
     "check": "npm run test && npm run lint"
   },
   "repository": {
@@ -32,6 +34,7 @@
   },
   "devDependencies": {
     "coffee-19-jshint": "^2.3.1",
+    "coffee-coverage": "^0.6.3",
     "coffeelint": "^1.10.1",
     "expect.js": "^0.3.1",
     "mocha": "^2.2.5",
