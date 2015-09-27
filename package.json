@@ -7,10 +7,14 @@
     "coffeelint": "git ls-files | grep \"\\.coffee$\" | xargs node_modules/.bin/coffeelint -c",
     "coffee-jshint": "git ls-files | grep \"\\.coffee$\" | xargs node_modules/.bin/coffee-jshint -o node,mocha,loopfunc",
     "lint": "npm run coffeelint && npm run coffee-jshint",
-    "test": "node_modules/.bin/mocha --compilers coffee:coffee-script/register --recursive test",
-    "coverage": "node_modules/.bin/mocha --compilers coffee:coffee-script/register --reporter html-cov --require coverage/init.js --recursive test > coverage/coverage.html && xdg-open coverage/coverage.html",
-    "checkcov": "npm run check && npm run coverage",
-    "check": "npm run test && npm run lint"
+    "unittest": "node_modules/.bin/mocha --compilers coffee:coffee-script/register --recursive test",
+    "htmlcov": "node_modules/.bin/mocha --compilers coffee:coffee-script/register --reporter html-cov --require coverage/init.js --recursive test > coverage/coverage.html",
+    "showcov": "npm run htmlcov && xdg-open coverage/coverage.html",
+    "lcov": "node_modules/.bin/mocha --compilers coffee:coffee-script/register --reporter mocha-lcov-reporter --require coverage/init.js --recursive test > coverage/coverage.lcov",
+    "fix-lcov-paths": "sed 's,SF:,SF:src/,' coverage/coverage.lcov > coverage/coverage-fixed.lcov",
+    "coveralls": "npm run lcov && npm run fix-lcov-paths && node_modules/coveralls/bin/coveralls.js < coverage/coverage-fixed.lcov",
+    "localtest": "npm run unittest && npm run lint && npm run showcov",
+    "test": "npm run unittest && npm run lint && npm run coveralls"
   },
   "repository": {
     "type": "git",
@@ -36,9 +40,11 @@
     "coffee-19-jshint": "^2.3.1",
     "coffee-coverage": "^0.6.3",
     "coffeelint": "^1.10.1",
+    "coveralls": "^2.11.4",
     "es6-symbol": "^2.0.1",
     "expect.js": "^0.3.1",
     "mocha": "^2.2.5",
+    "mocha-lcov-reporter": "^1.0.0",
     "mockery": "^1.4.0",
     "sinon": "^1.15.3"
   }
