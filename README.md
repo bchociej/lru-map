@@ -2,10 +2,10 @@
 
 Wraps ES6 Map (a key-value structure) in an LRU eviction framework complete with "max age" checking.
 
-Branch  | Build Status
-------- | ------------
-master  | [![master Build Status](https://travis-ci.org/bchociej/lru-map.svg?branch=master)](https://travis-ci.org/bchociej/lru-map)
-develop | [![develop Build Status](https://travis-ci.org/bchociej/lru-map.svg?branch=develop)](https://travis-ci.org/bchociej/lru-map)
+Branch  | Build Status | Coverage
+------- | ------------ | --------
+master  | [![master Build Status](https://travis-ci.org/bchociej/lru-map.svg?branch=master)](https://travis-ci.org/bchociej/lru-map) | [![master Coverage Status](https://coveralls.io/repos/bchociej/lru-map/badge.svg?branch=master&service=github)](https://coveralls.io/github/bchociej/lru-map?branch=master)
+develop | [![develop Build Status](https://travis-ci.org/bchociej/lru-map.svg?branch=develop)](https://travis-ci.org/bchociej/lru-map) | [![develop Coverage Status](https://coveralls.io/repos/bchociej/lru-map/badge.svg?branch=develop&service=github)](https://coveralls.io/github/bchociej/lru-map?branch=develop)
 
 ## Usage
 
