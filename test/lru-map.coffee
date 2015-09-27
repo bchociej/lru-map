@@ -367,9 +367,27 @@ describe 'LRUMap', ->
 			expect(lmap.currentSize()).to.be 0
 
 	describe '#set()', ->
-		it 'reaps stale entries'
-		it 'errors if calcSize does not return a positive number'
-		it 'errors if the value cannot fit'
+		it 'reaps stale entries', ->
+			lmap = new LRUMap
+			called = false
+			lmap.reapStale = -> called = true
+			lmap.set 'hello', 'world'
+
+			expect(called).to.be true
+
+		it 'errors if calcSize does not return a positive number', ->
+			lmap = new LRUMap calcSize: (x) -> x.size
+
+			expect(->
+				lmap.set 'negative', {size: -1}
+			).to.throwError /positive/
+
+		it 'errors if the value cannot fit', ->
+			lmap = new LRUMap {maxSize: 10, calcSize: (x) -> x.size}
+
+			expect(->
+				lmap.set 'big', {size: 100}
+			).to.throwError /size/
 
 		it 'updates the current size on insert', ->
 			lmap = new LRUMap {calcSize: (x) -> x.size}
@@ -391,27 +409,217 @@ describe 'LRUMap', ->
 			lmap.set 'one', {size: 10}
 			expect(lmap.currentSize()).to.be 10
 
-		it 'sets the specified key to the specified value'
-		it 'returns the map'
-		it 'causes eviction when appropriate'
+		it 'sets the specified key to the specified value', ->
+			lmap = new LRUMap
+
+			# test the primitive cases
+			lmap.set true, 1234
+			lmap.set 'hello', null
+			lmap.set 56, 'sup'
+
+			expect(lmap.get true).to.be 1234
+			expect(lmap.get 'hello').to.be null
+			expect(lmap.get 56).to.be 'sup'
+
+			# build a non-trivial object key to test ref eq
+			objKey = {foo: 'bar', quux: {frank: new Date}}
+			objKey.baz = objKey
+
+			# also use a non-trivial value
+			objValue = objKey.quux
+
+			lmap.set objKey, objValue
+			expect(lmap.get objKey).to.be objValue
+
+			# finally verify that non-primitives aren't compared w/ value eq
+			objKey2 = {hey: 'how are ya'}
+			lmap.set objKey2, {i: 'dunno lol'}
+
+			expect(lmap.get {hey: 'how are ya'}).to.not.be {i: 'dunno lol'}
+			expect(lmap.get objKey2).to.not.be {i: 'dunno lol'}
+
+		it 'returns the map', ->
+			lmap = new LRUMap
+			expect(lmap.set('foo', 'bar')).to.be lmap
+
+		it 'causes eviction when appropriate', ->
+			lmap = new LRUMap {maxSize: 10, calcSize: (x) -> x.size}
+			lmap.set 'seven', {size: 7}
+			lmap.set 'six', {size: 6}
+
+			expect(lmap.get 'seven').to.be undefined
+			expect(lmap.get 'six').to.eql {size: 6}
 
 		describe 'eviction', ->
-			it 'evicts the oldest entries'
-			it 'updates the current size'
-			it 'reaps stales'
-			it 'triggers onEvict'
-			it 'triggers onRemove'
+			it 'evicts the oldest entries', ->
+				lmap = new LRUMap {maxSize: 10, calcSize: (x) -> x.size}
+				lmap.set 'one', {size: 3}
+				lmap.set 'two', {size: 3}
+				lmap.set 'three', {size: 3}
+				lmap.get 'one'
+				lmap.set 'four', {size: 3}
+
+				expect(lmap.get 'one').to.eql {size: 3}
+				expect(lmap.get 'two').to.be undefined
+				expect(lmap.get 'three').to.eql {size: 3}
+				expect(lmap.get 'four').to.eql {size: 3}
+
+			it 'updates the current size', ->
+				lmap = new LRUMap {maxSize: 10, calcSize: (x) -> x.size}
+				lmap.set 'one', {size: 3}
+				expect(lmap.currentSize()).to.be 3
+				lmap.set 'two', {size: 4}
+				expect(lmap.currentSize()).to.be 7
+				lmap.set 'three', {size: 5}
+				expect(lmap.currentSize()).to.be 9
+				lmap.set 'four', {size: 6}
+				expect(lmap.currentSize()).to.be 6
+
+			it 'reaps stales', ->
+				lmap = new LRUMap
+				called = false
+				lmap.reapStale = -> called = true
+				lmap.set 'hello', 'world'
+
+				expect(called).to.be true
+
+			it 'triggers onEvict correctly', ->
+				called = 0
+
+				lmap = new LRUMap {
+					maxSize: 5
+					calcSize: (x) -> x.size
+				}
+
+				lmap.set 'five', {size: 5}
+
+				lmap.onEvict (k, v) ->
+					called++
+					expect(k).to.be 'five'
+					expect(v.size).to.be 5
+
+				lmap.set 'one', {size: 1}
+				expect(called).to.be 1
+
+				lmap.onEvict -> expect().fail('should not have evicted')
+				lmap.set 'two', {size: 2}
+				lmap.set 'alsotwo', {size: 2}
+
+				lmap.onEvict (k, v) ->
+					unless k in ['one', 'two']
+						expect().fail 'wrong entry evicted'
+
+					if k is 'one'
+						expect(v.size).to.be 1
+					else
+						expect(v.size).to.be 2
+
+					called++
+
+				lmap.set 'three', {size: 3}
+				expect(called).to.be 3
+
+			it 'triggers onRemove', ->
+				called = 0
+
+				lmap = new LRUMap {
+					maxSize: 5
+					calcSize: (x) -> x.size
+				}
+
+				lmap.set 'five', {size: 5}
+
+				lmap.onRemove (k, v) ->
+					called++
+					expect(k).to.be 'five'
+					expect(v.size).to.be 5
+
+				lmap.set 'one', {size: 1}
+				expect(called).to.be 1
+
+				lmap.onRemove -> expect().fail('should not have evicted')
+				lmap.set 'two', {size: 2}
+				lmap.set 'alsotwo', {size: 2}
+
+				lmap.onRemove (k, v) ->
+					unless k in ['one', 'two']
+						expect().fail 'wrong entry evicted'
+
+					if k is 'one'
+						expect(v.size).to.be 1
+					else
+						expect(v.size).to.be 2
+
+					called++
+
+				lmap.set 'three', {size: 3}
+				expect(called).to.be 3
 
 	describe '#delete()', ->
-		it 'removes the specified key and its value'
-		it 'updates the current size'
-		it 'reaps stale entries after deleting the specified key'
-		it 'returns true if the key existed'
-		it 'returns false if the key did not exist'
+		it 'removes the specified key and its value', ->
+			lmap = new LRUMap
+			lmap.set 'one', 'yessir'
+			expect(lmap.get 'one').to.be 'yessir'
+
+			lmap.delete 'one'
+			expect(lmap.get 'one').to.be undefined
+
+			objKey = {foo: 'bar'}
+			objKey.baz = objKey
+
+			lmap.set objKey, 'here i am'
+			expect(lmap.get objKey).to.be 'here i am'
+
+			lmap.delete objKey
+			expect(lmap.get objKey).to.be undefined
+
+		it 'updates the current size', ->
+			lmap = new LRUMap calcSize: (x) -> x.size
+			lmap.set 'one', {size: 1}
+			lmap.set 'five', {size: 5}
+			lmap.set 'ten', {size: 10}
+			expect(lmap.currentSize()).to.be 16
+
+			lmap.delete 'five'
+			expect(lmap.currentSize()).to.be 11
+			lmap.delete 'ten'
+			expect(lmap.currentSize()).to.be 1
+			lmap.delete 'one'
+			expect(lmap.currentSize()).to.be 0
+
+		it 'reaps stale entries after deleting the specified key', ->
+			lmap = new LRUMap
+			called = 0
+			lmap.reapStale = -> called++
+			lmap.set 'hello', 'world'
+			lmap.delete 'hello'
+			lmap.delete 'hello'
+			lmap.delete 'nope'
+			expect(called).to.be 4
+
+		it 'returns true iff the key existed', ->
+			lmap = new LRUMap
+			lmap.set 'hello', 'world'
+			expect(lmap.delete 'nope').to.be false
+			expect(lmap.delete 'hello').to.be true
+			expect(lmap.delete 'hello').to.be false
 
 	describe '#clear()', ->
-		it 'removes all entries'
-		it 'updates the current size'
+		it 'removes all entries', ->
+			lmap = new LRUMap
+			lmap.set 'one', 1
+			lmap.set 'two', 2
+
+			lmap.clear()
+			lmap.forEach -> expect().fail 'should have no entries'
+
+		it 'updates the current size', ->
+			lmap = new LRUMap
+			lmap.set 'one', 1
+			lmap.set 'two', 2
+
+			lmap.clear()
+			expect(lmap.currentSize()).to.be 0
 
 	describe '#get()', ->
 		it 'returns undefined if the key does not exist'
