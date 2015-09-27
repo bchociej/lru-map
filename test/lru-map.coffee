@@ -1,9 +1,25 @@
+###
+coffee-jshint doesn't know how to suppress jshint error counting, so the following directive is necessary
+even though there are no coffee-jshint-reportable errors
+###
+
+### jshint maxerr: 100 ###
+
 expect  = require 'expect.js'
 mockery = require 'mockery'
 sinon   = require 'sinon'
 
 Map    = require 'es6-map'
+Symbol = require 'es6-symbol'
 LRUMap = require '../src/lru-map'
+
+it2array = (it) ->
+	result = []
+
+	loop
+		next = it.next()
+		return result if next.done
+		result.push next.value
 
 describe 'LRUMap', ->
 	beforeEach ->
@@ -367,9 +383,27 @@ describe 'LRUMap', ->
 			expect(lmap.currentSize()).to.be 0
 
 	describe '#set()', ->
-		it 'reaps stale entries'
-		it 'errors if calcSize does not return a positive number'
-		it 'errors if the value cannot fit'
+		it 'reaps stale entries', ->
+			lmap = new LRUMap
+			called = false
+			lmap.reapStale = -> called = true
+			lmap.set 'hello', 'world'
+
+			expect(called).to.be true
+
+		it 'errors if calcSize does not return a positive number', ->
+			lmap = new LRUMap calcSize: (x) -> x.size
+
+			expect(->
+				lmap.set 'negative', {size: -1}
+			).to.throwError /positive/
+
+		it 'errors if the value cannot fit', ->
+			lmap = new LRUMap {maxSize: 10, calcSize: (x) -> x.size}
+
+			expect(->
+				lmap.set 'big', {size: 100}
+			).to.throwError /size/
 
 		it 'updates the current size on insert', ->
 			lmap = new LRUMap {calcSize: (x) -> x.size}
@@ -391,59 +425,548 @@ describe 'LRUMap', ->
 			lmap.set 'one', {size: 10}
 			expect(lmap.currentSize()).to.be 10
 
-		it 'sets the specified key to the specified value'
-		it 'returns the map'
-		it 'causes eviction when appropriate'
+		it 'sets the specified key to the specified value', ->
+			lmap = new LRUMap
+
+			# test the primitive cases
+			lmap.set true, 1234
+			lmap.set 'hello', null
+			lmap.set 56, 'sup'
+
+			expect(lmap.get true).to.be 1234
+			expect(lmap.get 'hello').to.be null
+			expect(lmap.get 56).to.be 'sup'
+
+			# build a non-trivial object key to test ref eq
+			objKey = {foo: 'bar', quux: {frank: new Date}}
+			objKey.baz = objKey
+
+			# also use a non-trivial value
+			objValue = objKey.quux
+
+			lmap.set objKey, objValue
+			expect(lmap.get objKey).to.be objValue
+
+			# finally verify that non-primitives aren't compared w/ value eq
+			objKey2 = {hey: 'how are ya'}
+			lmap.set objKey2, {i: 'dunno lol'}
+
+			expect(lmap.get {hey: 'how are ya'}).to.not.be {i: 'dunno lol'}
+			expect(lmap.get objKey2).to.not.be {i: 'dunno lol'}
+
+		it 'returns the map', ->
+			lmap = new LRUMap
+			expect(lmap.set('foo', 'bar')).to.be lmap
+
+		it 'causes eviction when appropriate', ->
+			lmap = new LRUMap {maxSize: 10, calcSize: (x) -> x.size}
+			lmap.set 'seven', {size: 7}
+			lmap.set 'six', {size: 6}
+
+			expect(lmap.get 'seven').to.be undefined
+			expect(lmap.get 'six').to.eql {size: 6}
 
 		describe 'eviction', ->
-			it 'evicts the oldest entries'
-			it 'updates the current size'
-			it 'reaps stales'
-			it 'triggers onEvict'
-			it 'triggers onRemove'
+			it 'evicts the oldest entries', ->
+				lmap = new LRUMap {maxSize: 10, calcSize: (x) -> x.size}
+				lmap.set 'one', {size: 3}
+				lmap.set 'two', {size: 3}
+				lmap.set 'three', {size: 3}
+				lmap.get 'one'
+				lmap.set 'four', {size: 3}
+
+				expect(lmap.get 'one').to.eql {size: 3}
+				expect(lmap.get 'two').to.be undefined
+				expect(lmap.get 'three').to.eql {size: 3}
+				expect(lmap.get 'four').to.eql {size: 3}
+
+			it 'updates the current size', ->
+				lmap = new LRUMap {maxSize: 10, calcSize: (x) -> x.size}
+				lmap.set 'one', {size: 3}
+				expect(lmap.currentSize()).to.be 3
+				lmap.set 'two', {size: 4}
+				expect(lmap.currentSize()).to.be 7
+				lmap.set 'three', {size: 5}
+				expect(lmap.currentSize()).to.be 9
+				lmap.set 'four', {size: 6}
+				expect(lmap.currentSize()).to.be 6
+
+			it 'reaps stales', ->
+				lmap = new LRUMap
+				called = false
+				lmap.reapStale = -> called = true
+				lmap.set 'hello', 'world'
+
+				expect(called).to.be true
+
+			it 'triggers onEvict correctly', ->
+				called = 0
+
+				lmap = new LRUMap {
+					maxSize: 5
+					calcSize: (x) -> x.size
+				}
+
+				lmap.set 'five', {size: 5}
+
+				lmap.onEvict (k, v) ->
+					called++
+					expect(k).to.be 'five'
+					expect(v.size).to.be 5
+
+				lmap.set 'one', {size: 1}
+				expect(called).to.be 1
+
+				lmap.onEvict -> expect().fail('should not have evicted')
+				lmap.set 'two', {size: 2}
+				lmap.set 'alsotwo', {size: 2}
+
+				lmap.onEvict (k, v) ->
+					unless k in ['one', 'two']
+						expect().fail 'wrong entry evicted'
+
+					if k is 'one'
+						expect(v.size).to.be 1
+					else
+						expect(v.size).to.be 2
+
+					called++
+
+				lmap.set 'three', {size: 3}
+				expect(called).to.be 3
+
+			it 'triggers onRemove', ->
+				called = 0
+
+				lmap = new LRUMap {
+					maxSize: 5
+					calcSize: (x) -> x.size
+				}
+
+				lmap.set 'five', {size: 5}
+
+				lmap.onRemove (k, v) ->
+					called++
+					expect(k).to.be 'five'
+					expect(v.size).to.be 5
+
+				lmap.set 'one', {size: 1}
+				expect(called).to.be 1
+
+				lmap.onRemove -> expect().fail('should not have evicted')
+				lmap.set 'two', {size: 2}
+				lmap.set 'alsotwo', {size: 2}
+
+				lmap.onRemove (k, v) ->
+					unless k in ['one', 'two']
+						expect().fail 'wrong entry evicted'
+
+					if k is 'one'
+						expect(v.size).to.be 1
+					else
+						expect(v.size).to.be 2
+
+					called++
+
+				lmap.set 'three', {size: 3}
+				expect(called).to.be 3
 
 	describe '#delete()', ->
-		it 'removes the specified key and its value'
-		it 'updates the current size'
-		it 'reaps stale entries after deleting the specified key'
-		it 'returns true if the key existed'
-		it 'returns false if the key did not exist'
+		it 'removes the specified key and its value', ->
+			lmap = new LRUMap
+			lmap.set 'one', 'yessir'
+			expect(lmap.get 'one').to.be 'yessir'
+
+			lmap.delete 'one'
+			expect(lmap.get 'one').to.be undefined
+
+			objKey = {foo: 'bar'}
+			objKey.baz = objKey
+
+			lmap.set objKey, 'here i am'
+			expect(lmap.get objKey).to.be 'here i am'
+
+			lmap.delete objKey
+			expect(lmap.get objKey).to.be undefined
+
+		it 'updates the current size', ->
+			lmap = new LRUMap calcSize: (x) -> x.size
+			lmap.set 'one', {size: 1}
+			lmap.set 'five', {size: 5}
+			lmap.set 'ten', {size: 10}
+			expect(lmap.currentSize()).to.be 16
+
+			lmap.delete 'five'
+			expect(lmap.currentSize()).to.be 11
+			lmap.delete 'ten'
+			expect(lmap.currentSize()).to.be 1
+			lmap.delete 'one'
+			expect(lmap.currentSize()).to.be 0
+
+		it 'reaps stale entries after deleting the specified key', ->
+			lmap = new LRUMap
+			called = 0
+			lmap.reapStale = -> called++
+			lmap.set 'hello', 'world'
+			lmap.delete 'hello'
+			lmap.delete 'hello'
+			lmap.delete 'nope'
+			expect(called).to.be 4
+
+		it 'returns true iff the key existed', ->
+			lmap = new LRUMap
+			lmap.set 'hello', 'world'
+			expect(lmap.delete 'nope').to.be false
+			expect(lmap.delete 'hello').to.be true
+			expect(lmap.delete 'hello').to.be false
 
 	describe '#clear()', ->
-		it 'removes all entries'
-		it 'updates the current size'
+		it 'removes all entries', ->
+			lmap = new LRUMap
+			lmap.set 'one', 1
+			lmap.set 'two', 2
+
+			lmap.clear()
+			lmap.forEach -> expect().fail 'should have no entries'
+
+		it 'updates the current size', ->
+			lmap = new LRUMap
+			lmap.set 'one', 1
+			lmap.set 'two', 2
+
+			lmap.clear()
+			expect(lmap.currentSize()).to.be 0
 
 	describe '#get()', ->
-		it 'returns undefined if the key does not exist'
-		it 'returns the value if the key exists'
-		it 'works with object keys'
-		it 'works with primitive keys'
-		it 'updates timestamp iff accessUpdatesTimestamp'
-		it 'updates LRU order correctly'
+		it 'returns undefined if the key does not exist', ->
+			expect(new LRUMap().get 'foobaz').to.be undefined
+
+		it 'returns the value if the key exists', ->
+			lmap = new LRUMap
+			lmap.set 'hello', {you: 'betcha'}
+			expect(lmap.get 'hello').to.eql {you: 'betcha'}
+
+		it 'works with object keys', ->
+			lmap = new LRUMap
+
+			key1 = {foo: 'bar'}
+			key1.quux = key1 # twist it up
+			key2 = new Date
+
+			lmap.set key1, 1
+			lmap.set key2, 2
+
+			expect(lmap.get key1).to.be 1
+			expect(lmap.get key2).to.be 2
+
+		it 'works with primitive keys', ->
+			lmap = new LRUMap
+
+			sym = Symbol('whoa')
+
+			lmap.set 1.234, 1
+			lmap.set true, 2
+			lmap.set false, 3
+			lmap.set 'fizzbuzz', 4
+			lmap.set Infinity, 5
+			lmap.set NaN, 6
+			lmap.set sym, 7
+			lmap.set null, 7
+
+			expect(lmap.get 1.234).to.be 1
+			expect(lmap.get true).to.be 2
+			expect(lmap.get false).to.be 3
+			expect(lmap.get 'fizzbuzz').to.be 4
+			expect(lmap.get Infinity).to.be 5
+			expect(lmap.get NaN).to.be 6
+			expect(lmap.get sym).to.be 7
+			expect(lmap.get null).to.be 7
+
+		it 'updates timestamp iff accessUpdatesTimestamp', ->
+			lmap = new LRUMap accessUpdatesTimestamp: true
+			lmap._map.set 'foo', {
+				size: 1
+				value: 'sup'
+				timestamp: 0
+			}
+
+			lmap._total = 1
+			lmap.get 'foo'
+			expect(lmap._map.get('foo').timestamp).to.be.greaterThan +(new Date) - 1000
+
+		it 'updates LRU order correctly', ->
+			lmap = new LRUMap
+			lmap.set 'one', 1
+			lmap.set 'two', 2
+			lmap.set 'three', 3
+			lmap.set 'four', 4
+			expect(it2array lmap.keys()).to.eql [
+				'one'
+				'two'
+				'three'
+				'four'
+			]
+
+			lmap.get 'two'
+			expect(it2array lmap.keys()).to.eql [
+				'one'
+				'three'
+				'four'
+				'two'
+			]
+
+			lmap.get 'three'
+			expect(it2array lmap.keys()).to.eql [
+				'one'
+				'four'
+				'two'
+				'three'
+			]
+
 
 	describe '#has()', ->
-		it 'reaps stales'
-		it 'says if the map contains the key'
+		it 'reaps stales', ->
+			lmap = new LRUMap
+			called = false
+			lmap.reapStale = -> called = true
+			lmap.has 'whatsup'
+			expect(called).to.be true
+
+		it 'says if the map contains the key', ->
+			lmap = new LRUMap
+			expect(lmap.has 'akey').to.be false
+
+			lmap.set 'akey', 1
+			expect(lmap.has 'akey').to.be true
+			expect(lmap.has 'otherkey').to.be false
+
+			lmap.set 'otherkey', 1
+			expect(lmap.has 'akey').to.be true
+			expect(lmap.has 'otherkey').to.be true
+
+			lmap.delete 'otherkey'
+			expect(lmap.has 'akey').to.be true
+			expect(lmap.has 'otherkey').to.be false
 
 	describe '#peek()', ->
-		it 'reaps stales'
-		it 'returns the value without affected timestamp or LRU order'
+		it 'reaps stales', ->
+			lmap = new LRUMap
+			called = false
+			lmap.reapStale = -> called = true
+			lmap.peek 'whatsup'
+			expect(called).to.be true
+
+		it 'returns the value without affecting timestamp or LRU order', ->
+			lmap = new LRUMap accessUpdatesTimestamp: true
+
+			lmap._map.set 'one', {
+				size: 1
+				value: 1
+				timestamp: 0
+			}
+
+			lmap._total = 1
+			lmap.set 'two', 2
+			lmap.set 'three', 3
+			lmap.peek 'one'
+
+			expect(lmap._map.get('one').timestamp).to.be 0
+			expect(it2array lmap.keys()).to.eql [
+				'one'
+				'two'
+				'three'
+			]
+
+			lmap.peek 'two'
+			expect(it2array lmap.keys()).to.eql [
+				'one'
+				'two'
+				'three'
+			]
 
 	describe '#sizeOf()', ->
-		it 'returns the stored size of the value for the specified key'
+		it 'returns the stored size of the value for the specified key', ->
+			lmap = new LRUMap calcSize: (x) -> x.size
+			obj = size: 3
+			lmap.set 'foo', obj
+			expect(lmap.sizeOf 'foo').to.be 3
+			obj.size = 5
+			expect(lmap.sizeOf 'foo').to.be 3
 
 	describe '#keys()', ->
-		it 'returns an iterator to the map\'s keys'
+		it 'reaps stales', ->
+			lmap = new LRUMap
+			called = false
+			lmap.reapStale = -> called = true
+			lmap.keys()
+			expect(called).to.be true
+
+		it 'returns an iterator to the map\'s keys', ->
+			lmap = new LRUMap
+			lmap.set 'foo', 1
+			lmap.set 'bar', 2
+			lmap.set 'baz', 3
+
+			expect(it2array lmap.keys()).to.eql [
+				'foo', 'bar', 'baz'
+			]
 
 	describe '#values()', ->
-		it 'returns an iterator to the map\'s values'
-		it 'updates a value\'s timestamp when the iterator reaches that value, iff accessUpdatesTimestamp'
+		it 'reaps stales', ->
+			lmap = new LRUMap
+			called = false
+			lmap.reapStale = -> called = true
+			lmap.values()
+			expect(called).to.be true
+
+		it 'returns an iterator to the map\'s values', ->
+			lmap = new LRUMap
+			lmap.set 'foo', 1
+			lmap.set 'bar', 2
+			lmap.set 'baz', 3
+
+			expect(it2array lmap.values()).to.eql [
+				1, 2, 3
+			]
+
+		it 'updates a value\'s timestamp when the iterator reaches that value, iff accessUpdatesTimestamp', ->
+			lmap = new LRUMap accessUpdatesTimestamp: true
+
+			foo = {
+				size: 1
+				value: 1
+				timestamp: 0
+			}
+
+			bar = {
+				size: 1
+				value: 1
+				timestamp: 0
+			}
+
+			lmap._map.set 'foo', foo
+			lmap._map.set 'bar', bar
+			lmap._total = 2
+
+			it = lmap.values()
+			expect(foo.timestamp).to.be 0
+			expect(bar.timestamp).to.be 0
+
+			it.next()
+			expect(foo.timestamp).to.be.greaterThan +(new Date) - 100
+			expect(bar.timestamp).to.be 0
+
+			it.next()
+			expect(foo.timestamp).to.be.greaterThan +(new Date) - 100
+			expect(bar.timestamp).to.be.greaterThan +(new Date) - 100
+
+			lmap = new LRUMap accessUpdatesTimestamp: false
+
+			foo = {
+				size: 1
+				value: 1
+				timestamp: 0
+			}
+
+			bar = {
+				size: 1
+				value: 1
+				timestamp: 0
+			}
+
+			lmap._map.set 'foo', foo
+			lmap._map.set 'bar', bar
+			lmap._total = 2
+
+			it = lmap.values()
+			it.next()
+			it.next()
+			expect(foo.timestamp).to.be 0
+			expect(bar.timestamp).to.be 0
 
 	describe '#entries()', ->
-		it 'returns an iterator to [key, value] pairs'
-		it 'updates a value\'s timestamp when the iterator reaches that pair, iff accessUpdatesTimestamp'
+		it 'reaps stales', ->
+			lmap = new LRUMap
+			called = false
+			lmap.reapStale = -> called = true
+			lmap.entries()
+			expect(called).to.be true
+
+		it 'returns an iterator to [key, value] pairs', ->
+			lmap = new LRUMap
+			lmap.set 'foo', 1
+			lmap.set 'bar', 2
+			lmap.set 'baz', 3
+
+			expect(it2array lmap.entries()).to.eql [
+				['foo', 1]
+				['bar', 2]
+				['baz', 3]
+			]
+
+		it 'updates a value\'s timestamp when the iterator reaches that pair, iff accessUpdatesTimestamp', ->
+			lmap = new LRUMap accessUpdatesTimestamp: true
+
+			foo = {
+				size: 1
+				value: 1
+				timestamp: 0
+			}
+
+			bar = {
+				size: 1
+				value: 1
+				timestamp: 0
+			}
+
+			lmap._map.set 'foo', foo
+			lmap._map.set 'bar', bar
+			lmap._total = 2
+
+			it = lmap.entries()
+			expect(foo.timestamp).to.be 0
+			expect(bar.timestamp).to.be 0
+
+			it.next()
+			expect(foo.timestamp).to.be.greaterThan +(new Date) - 100
+			expect(bar.timestamp).to.be 0
+
+			it.next()
+			expect(foo.timestamp).to.be.greaterThan +(new Date) - 100
+			expect(bar.timestamp).to.be.greaterThan +(new Date) - 100
+
+			lmap = new LRUMap accessUpdatesTimestamp: false
+
+			foo = {
+				size: 1
+				value: 1
+				timestamp: 0
+			}
+
+			bar = {
+				size: 1
+				value: 1
+				timestamp: 0
+			}
+
+			lmap._map.set 'foo', foo
+			lmap._map.set 'bar', bar
+			lmap._total = 2
+
+			it = lmap.entries()
+			it.next()
+			it.next()
+			expect(foo.timestamp).to.be 0
+			expect(bar.timestamp).to.be 0
 
 	describe '#forEach()', ->
+		it 'reaps stales', ->
+			lmap = new LRUMap
+			called = false
+			lmap.reapStale = -> called = true
+			lmap.forEach -> undefined
+			expect(called).to.be true
+
 		it 'calls back with correct parameters for each entry in order', ->
 			lmap = new LRUMap()
 			lmap.set 'foo', 'whizbang'
@@ -478,7 +1001,61 @@ describe 'LRUMap', ->
 
 			expect(called).to.be true
 
-		it 'updates all timestamps, iff accessUpdatesTimestamp'
+		it 'updates all timestamps in order, iff accessUpdatesTimestamp', ->
+			lmap = new LRUMap accessUpdatesTimestamp: true
+
+			foo = {
+				size: 1
+				value: 1
+				timestamp: 0
+			}
+
+			bar = {
+				size: 1
+				value: 1
+				timestamp: 0
+			}
+
+			lmap._map.set 'foo', foo
+			lmap._map.set 'bar', bar
+			lmap._total = 2
+			called = 0
+
+			lmap.forEach (value, key) ->
+				called++
+
+				if key is 'foo'
+					expect(foo.timestamp).to.be.greaterThan +(new Date) - 100
+					expect(bar.timestamp).to.be 0
+
+				if key is 'bar'
+					expect(foo.timestamp).to.be.greaterThan +(new Date) - 100
+					expect(bar.timestamp).to.be.greaterThan +(new Date) - 100
+
+			expect(called).to.be 2
+
+			lmap = new LRUMap accessUpdatesTimestamp: false
+
+			foo = {
+				size: 1
+				value: 1
+				timestamp: 0
+			}
+
+			bar = {
+				size: 1
+				value: 1
+				timestamp: 0
+			}
+
+			lmap._map.set 'foo', foo
+			lmap._map.set 'bar', bar
+			lmap._total = 2
+			called = 0
+			lmap.forEach (value, key) -> called++
+			expect(called).to.be 2
+			expect(foo.timestamp).to.be 0
+			expect(bar.timestamp).to.be 0
 
 	describe '#_total', ->
 		it 'is correct after basic operations', ->

@@ -236,7 +236,7 @@ module.exports = class LRUMap extends Map
 				if ev? and @_accessUpdatesTimestamp
 					ev.timestamp = +(new Date)
 
-				return {value: ev?.value}
+				return {value: ev?.value, done: not ev?}
 		}
 
 	# non-evicting; reaps stales
@@ -252,9 +252,9 @@ module.exports = class LRUMap extends Map
 					if @_accessUpdatesTimestamp
 						entry[1].timestamp = +(new Date)
 
-					return {value: [entry[0], entry[1].value]}
+					return {done: false, value: [entry[0], entry[1].value]}
 				else
-					return {}
+					return {done: true}
 		}
 
 	# non-evicting; reaps stales
