@@ -1,6 +1,6 @@
 {
   "name": "lru-map",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "An ES6-y Map that evicts entries with an LRU policy",
   "main": "index.js",
   "scripts": {
