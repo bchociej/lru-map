@@ -1,7 +1,10 @@
-# LRUMap (npm 'lru-map')
+# LRUMap
 
 Wraps ES6 Map (a key-value structure) in an LRU eviction framework complete with "max age" checking.
 
+Build status:
+* master - ![master build status](https://travis-ci.org/bchociej/lru-map.svg?branch=master)
+* develop - ![develop build status](https://travis-ci.org/bchociej/lru-map.svg?branch=develop)
 
 ## Usage
 
