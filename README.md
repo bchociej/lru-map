@@ -15,7 +15,7 @@ var LRUMap = require('lru-map');
 ## Terminology
 
 * **LRU**: Least Recently Used
-* **stale**: older than some threshold; the opposite is **fresh**
+* **stale**: older than the max age threshold; the opposite is **fresh**
 * **evict**: to delete an entry because it is the Least Recently Used entry and no longer fits in the collection
 
 

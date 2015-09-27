@@ -91,7 +91,7 @@ module.exports = class LRUMap extends Map
 
 	# non-mutating; idempotent
 	wouldCauseEviction: (value) ->
-		return @_calcSize(value) + @total > @_maxSize
+		return (@_calcSize(value) + @_total > @_maxSize) and (@_total > 0)
 
 	# non-mutating configuration method; no immediate effect
 	onEvict: (fn) ->
@@ -141,27 +141,31 @@ module.exports = class LRUMap extends Map
 
 		size = @_calcSize value
 		timestamp = +(new Date)
+		priorTotal = @_total
 
 		if isNaN(size) or size < 0 or typeof size isnt 'number'
-			throw new Error 'calcSize() must return a non-negative number'
+			throw new Error 'calcSize() must return a positive number'
+
+		if @_map.has key
+			priorTotal -= @_map.get(key).size
 
 		if size > @_maxSize
 			throw new Error "cannot store an object of that size (maxSize = #{@_maxSize}; value size = #{size})"
 
 		entries = @_map.entries()
 
-		while @_total + size > @_maxSize
+		while priorTotal + size > @_maxSize
 			oldest = entries.next().value
 
 			break unless oldest?
 
 			@_map.delete oldest[0]
-			@_total -= oldest[1].size
+			priorTotal -= oldest[1].size
 
 			@_onEvict oldest[0], oldest[1].value
 
 		@_map.set key, {size, value, timestamp}
-		@_total += size
+		@_total = priorTotal + size
 
 		return this
 
