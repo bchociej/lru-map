@@ -1,40 +1,51 @@
 Map = require 'es6-map'
+Symbol = require 'es6-symbol'
 
-module.exports = class LRUMap extends Map
+module.exports = class LRUMap
+	_maxSize = _maxAge = _calcSize = _user_onEvict = _user_onStale = _onRemove = undefined
+	_accessUpdatesTimestamp = _onEvict = _onStale = _map = _total = undefined
+
 	constructor: (opts = {}) ->
-		@_maxSize = opts.maxSize ? (Infinity)
-		@_maxAge = opts.maxAge ? (Infinity)
-		@_calcSize = opts.calcSize ? ((value) -> 1)
-		@_user_onEvict = opts.onEvict ? ((key, value) -> undefined)
-		@_user_onStale = opts.onStale ? ((key, value) -> undefined)
-		@_onRemove = opts.onRemove ? ((key, value) -> undefined)
-		@_accessUpdatesTimestamp = opts.accessUpdatesTimestamp ? false
+		_maxSize = opts.maxSize ? (Infinity)
+		_maxAge = opts.maxAge ? (Infinity)
+		_calcSize = opts.calcSize ? ((value) -> 1)
+		_user_onEvict = opts.onEvict ? ((key, value) -> undefined)
+		_user_onStale = opts.onStale ? ((key, value) -> undefined)
+		_onRemove = opts.onRemove ? ((key, value) -> undefined)
+		_accessUpdatesTimestamp = opts.accessUpdatesTimestamp ? false
 
-		unless typeof @_maxSize is 'number' and @_maxSize >= 0
+		unless typeof _maxSize is 'number' and _maxSize >= 0
 			throw new Error 'maxSize must be a non-negative number'
 
-		unless typeof @_calcSize is 'function'
+		unless typeof _calcSize is 'function'
 			throw new TypeError 'calcSize must be a function'
 
-		unless typeof @_user_onEvict is 'function'
+		unless typeof _user_onEvict is 'function'
 			throw new TypeError 'onEvict must be a function'
 
-		unless typeof @_user_onStale is 'function'
+		unless typeof _user_onStale is 'function'
 			throw new TypeError 'onStale must be a function'
 
-		unless typeof @_onRemove is 'function'
+		unless typeof _onRemove is 'function'
 			throw new TypeError 'onRemove must be a function'
 
-		@_onEvict = (key, value) =>
-			@_onRemove(key, value)
-			@_user_onEvict(key, value)
+		_onEvict = (key, value) ->
+			_onRemove(key, value)
+			_user_onEvict(key, value)
 
-		@_onStale = (key, value) =>
-			@_onRemove(key, value)
-			@_user_onStale(key, value)
+		_onStale = (key, value) ->
+			_onRemove(key, value)
+			_user_onStale(key, value)
 
-		@_map = new Map
-		@_total = 0
+		_map = new Map
+		_total = 0
+
+		this[Symbol.iterator] = -> @entries()
+
+		if LRUMap.__testing__ is true
+			@testMap = _map
+			@testSetTotal = (x) -> _total = x
+			@testSetMaxAge = (x) -> _maxAge = x
 
 	# immediate effect; reaps stales
 	maxAge: (age) ->
@@ -42,11 +53,11 @@ module.exports = class LRUMap extends Map
 			unless typeof age is 'number' and age > 0
 				throw new Error 'age must be a positive number of seconds'
 
-			@_maxAge = age
+			_maxAge = age
 
 			@reapStale()
 
-		return @_maxAge
+		return _maxAge
 
 	# no immediate effect
 	accessUpdatesTimestamp: (doesIt) ->
@@ -54,9 +65,9 @@ module.exports = class LRUMap extends Map
 			unless typeof doesIt is 'boolean'
 				throw new TypeError 'accessUpdatesTimestamp accepts a boolean'
 
-			@_accessUpdatesTimestamp = doesIt
+			_accessUpdatesTimestamp = doesIt
 
-		return @_accessUpdatesTimestamp
+		return _accessUpdatesTimestamp
 
 	# immediate effect; reaps stales
 	maxSize: (size) ->
@@ -64,73 +75,73 @@ module.exports = class LRUMap extends Map
 			unless typeof size is 'number' and size > 0
 				throw new Error 'size must be a positive number'
 
-			@_maxSize = size
+			_maxSize = size
 
 			@reapStale()
 
-			entries = @_map.entries()
-			while @_total > @_maxSize
+			entries = _map.entries()
+			while _total > _maxSize
 				oldest = entries.next().value
 
 				break unless oldest?
 
-				@_map.delete oldest[0]
-				@_total -= oldest[1].size
+				_map.delete oldest[0]
+				_total -= oldest[1].size
 
-				@_onEvict oldest[0], oldest[1].value
+				_onEvict oldest[0], oldest[1].value
 
-		return @_maxSize
+		return _maxSize
 
 	# non-mutating; idempotent
 	currentSize: ->
-		return @_total
+		return _total
 
 	# non-mutating; idempotent
 	fits: (value) ->
-		return @_calcSize(value) <= @_maxSize
+		return _calcSize(value) <= _maxSize
 
 	# non-mutating; idempotent
 	wouldCauseEviction: (value) ->
-		return (@_calcSize(value) + @_total > @_maxSize) and (@_total > 0)
+		return (_calcSize(value) + _total > _maxSize) and (_total > 0)
 
 	# non-mutating configuration method; no immediate effect
 	onEvict: (fn) ->
 		unless typeof fn is 'function'
 			throw new TypeError 'argument to onEvict must be a function'
 
-		@_onEvict = fn
+		_onEvict = fn
 
 	# non-mutating configuration method; no immediate effect
 	onStale: (fn) ->
 		unless typeof fn is 'function'
 			throw new TypeError 'argument to onStale must be a function'
 
-		@_onStale = fn
+		_onStale = fn
 
 	# non-mutating configuration method; no immediate effect
 	onRemove: (fn) ->
 		unless typeof fn is 'function'
 			throw new TypeError 'argument to onRemove must be a function'
 
-		@_onRemove = fn
+		_onRemove = fn
 
 	# reaps stales
 	reapStale: ->
-		return if @_maxAge is Infinity
+		return if _maxAge is Infinity
 
-		entries = @_map.entries()
+		entries = _map.entries()
 		cur = entries.next().value
 
 		while cur?
 			diff = (+(new Date) - cur[1].timestamp) / 1000
 
-			if diff > @_maxAge
-				@_map.delete cur[0]
-				@_total -= cur[1].size
+			if diff > _maxAge
+				_map.delete cur[0]
+				_total -= cur[1].size
 
-				@_onStale cur[0], cur[1].value
+				_onStale cur[0], cur[1].value
 			else
-				if @_accessUpdatesTimestamp
+				if _accessUpdatesTimestamp
 					break
 
 			cur = entries.next().value
@@ -139,43 +150,41 @@ module.exports = class LRUMap extends Map
 	set: (key, value) ->
 		@reapStale()
 
-		size = @_calcSize value
+		size = _calcSize value
 		timestamp = +(new Date)
-		priorTotal = @_total
+		priorTotal = _total
 
 		if isNaN(size) or size < 0 or typeof size isnt 'number'
 			throw new Error 'calcSize() must return a positive number'
 
-		if @_map.has key
-			priorTotal -= @_map.get(key).size
+		if _map.has key
+			priorTotal -= @sizeOf key
 
-		if size > @_maxSize
-			throw new Error "cannot store an object of that size (maxSize = #{@_maxSize}; value size = #{size})"
+		if size > _maxSize
+			throw new Error "cannot store an object of that size (maxSize = #{_maxSize}; value size = #{size})"
 
-		entries = @_map.entries()
+		entries = _map.entries()
 
-		while priorTotal + size > @_maxSize
+		while priorTotal + size > _maxSize
 			oldest = entries.next().value
 
 			break unless oldest?
 
-			@_map.delete oldest[0]
+			_map.delete oldest[0]
 			priorTotal -= oldest[1].size
 
-			@_onEvict oldest[0], oldest[1].value
+			_onEvict oldest[0], oldest[1].value
 
-		@_map.set key, {size, value, timestamp}
-		@_total = priorTotal + size
+		_map.set key, {size, value, timestamp}
+		_total = priorTotal + size
 
 		return this
 
 	# mutates Map state; affects LRU eviction; affects staleness; reaps stales
 	delete: (key) ->
-		entry = @_map.get key
-
-		if entry?
-			@_map.delete key
-			@_total -= entry.size
+		if _map.has key
+			_total -= @sizeOf key
+			_map.delete key
 			@reapStale()
 			return true
 		else
@@ -184,72 +193,75 @@ module.exports = class LRUMap extends Map
 
 	# mutates Map state
 	clear: ->
-		@_map.clear()
-		@_total = 0
+		_map.clear()
+		_total = 0
 		return
 
 	# affects LRU eviction; affects staleness if accessUpdatesTimestamp
 	get: (key) ->
-		entry = @_map.get key
+		entry = _map.get key
 
 		return undefined unless entry?
 
-		@_map.delete key
+		_map.delete key
 
-		if @_accessUpdatesTimestamp
+		if _accessUpdatesTimestamp
 			entry.timestamp = +(new Date)
 
-		@_map.set key, entry
+		_map.set key, entry
 
 		return entry.value
 
 	# non-evicting; reaps stales
 	has: (key) ->
 		@reapStale()
-		return @_map.has key
+		return _map.has key
 
 	# non-evicting; reaps stales
 	peek: (key) ->
 		@reapStale()
-		entry = @_map.get key
+		entry = _map.get key
 		return entry?.value
 
 	# non-mutating; idempotent
 	sizeOf: (key) ->
-		entry = @_map.get key
+		entry = _map.get key
 		return entry?.size
 
 	# non-evicting; reaps stales
 	keys: ->
 		@reapStale()
-		return @_map.keys()
+		return _map.keys()
 
 	# non-evicting; reaps stales
 	values: ->
 		@reapStale()
-		iter = @_map.values()
+		iter = _map.values()
 
 		return {
-			next: =>
+			next: ->
 				ev = iter.next().value
 
-				if ev? and @_accessUpdatesTimestamp
-					ev.timestamp = +(new Date)
+				if ev?
+					if _accessUpdatesTimestamp
+						ev.timestamp = +(new Date)
 
-				return {value: ev?.value, done: not ev?}
+					return {value: ev.value, done: false}
+
+				return {done: true}
 		}
 
 	# non-evicting; reaps stales
 	entries: ->
 		@reapStale()
-		iter = @_map.entries()
+		iter = _map.entries()
 
 		return {
-			next: =>
+			next: ->
 				entry = iter.next().value
 
 				if entry?
-					if @_accessUpdatesTimestamp
+					if _accessUpdatesTimestamp
 						entry[1].timestamp = +(new Date)
 
 					return {done: false, value: [entry[0], entry[1].value]}
@@ -260,8 +272,8 @@ module.exports = class LRUMap extends Map
 	# non-evicting; reaps stales
 	forEach: (callback, thisArg) ->
 		@reapStale()
-		@_map.forEach (value, key, map) =>
-			if @_accessUpdatesTimestamp
+		_map.forEach (value, key, map) =>
+			if _accessUpdatesTimestamp
 				value.timestamp = +(new Date)
 
 			callback.call thisArg, value.value, key, this

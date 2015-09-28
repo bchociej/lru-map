@@ -1,6 +1,6 @@
 ###
-coffee-jshint doesn't know how to suppress jshint error counting, so the following directive is necessary
-even though there are no coffee-jshint-reportable errors
+coffee-jshint doesn't know how to suppress jshint error counting, so the following directive
+is necessary even though there are no coffee-jshint reportable errors
 ###
 
 ### jshint maxerr: 100 ###
@@ -23,18 +23,22 @@ it2array = (it) ->
 
 describe 'LRUMap', ->
 	beforeEach ->
-		undefined
+		LRUMap.__testing__ = true
 
-	describe 'module entry point index.js', ->
-		it 'exports the LRUMap class', ->
-			expect(require('../index.js')).to.be LRUMap
+	after ->
+		delete LRUMap.__testing__
+
+	it 'exports the LRUMap class', ->
+		expect(require('../index.js')).to.be LRUMap
+
+	it 'is an iterable', ->
+		lmap = new LRUMap
+		it = lmap[Symbol.iterator]()
+		expect(typeof it.next).to.be 'function'
 
 	describe 'constructor', ->
 		it 'constructs an LRUMap', ->
 			expect(new LRUMap).to.be.an LRUMap
-
-		it 'constructs an instanceof Map', ->
-			expect(new LRUMap).to.be.a Map
 
 		it 'errors when maxSize is negative', ->
 			expect(->
@@ -127,9 +131,41 @@ describe 'LRUMap', ->
 	describe '#currentSize()', ->
 		it 'reports the current size', ->
 			lmap = new LRUMap
-			lmap._total = 1234
+			lmap.testSetTotal 1234
 
 			expect(lmap.currentSize()).to.be 1234
+
+		it 'is correct after basic operations', ->
+			lmap = new LRUMap
+
+			expect(lmap.currentSize()).to.be 0
+
+			lmap.set 'one', 1
+			lmap.set 'two', 1
+			lmap.set 'three', 1
+
+			expect(lmap.currentSize()).to.be 3
+
+			lmap.delete 'one'
+
+			expect(lmap.currentSize()).to.be 2
+
+			lmap.set 'four', 1
+			lmap.set 'five', 1
+
+			expect(lmap.currentSize()).to.be 4
+
+			lmap.maxSize 2
+
+			expect(lmap.currentSize()).to.be 2
+
+			lmap.clear()
+
+			expect(lmap.currentSize()).to.be 0
+
+			lmap.set 'one', 1
+			lmap.set 'two', 1
+			lmap.set 'three', 1
 
 	describe '#fits()', ->
 		it 'says whether the value argument would fit in the map', ->
@@ -201,13 +237,13 @@ describe 'LRUMap', ->
 			handler = -> called++
 			lmap.onStale handler
 
-			lmap._map.set 'one', {
+			lmap.testMap.set 'one', {
 				size: 1
 				value: 'hi'
 				timestamp: +(new Date) - 4000
 			}
 
-			lmap._total = 1
+			lmap.testSetTotal 1
 
 			expect(called).to.be 0
 
@@ -227,13 +263,13 @@ describe 'LRUMap', ->
 			handler = -> called++
 			lmap.onRemove handler
 
-			lmap._map.set 'one', {
+			lmap.testMap.set 'one', {
 				size: 1
 				value: 'hi'
 				timestamp: +(new Date) - 4000
 			}
 
-			lmap._total = 1
+			lmap.testSetTotal 1
 
 			expect(called).to.be 0
 
@@ -251,80 +287,80 @@ describe 'LRUMap', ->
 		it 'reaps the stale entries', ->
 			lmap = new LRUMap(maxAge: 100)
 
-			lmap._map.set 'staleA', {
+			lmap.testMap.set 'staleA', {
 				size: 1
 				value: 'hi'
 				timestamp: +(new Date) - (1000 * 1000)
 			}
 
-			lmap._map.set 'staleB', {
+			lmap.testMap.set 'staleB', {
 				size: 1
 				value: 'hi'
 				timestamp: +(new Date) - (1000 * 1000)
 			}
 
-			lmap._map.set 'freshA', {
+			lmap.testMap.set 'freshA', {
 				size: 1
 				value: 'hi'
 				timestamp: +(new Date)
 			}
 
-			lmap._map.set 'freshB', {
+			lmap.testMap.set 'freshB', {
 				size: 1
 				value: 'hi'
 				timestamp: +(new Date)
 			}
 
-			lmap._map.set 'staleC', {
+			lmap.testMap.set 'staleC', {
 				size: 1
 				value: 'hi'
 				timestamp: +(new Date) - (1000 * 1000)
 			}
 
-			lmap._map.set 'freshC', {
+			lmap.testMap.set 'freshC', {
 				size: 1
 				value: 'hi'
 				timestamp: +(new Date)
 			}
 
-			lmap._total = 6
+			lmap.testSetTotal 6
 
 			['staleA', 'staleB', 'staleC', 'freshA', 'freshB', 'freshC']
-			.forEach (x) -> expect(lmap._map.has(x)).to.be true
+			.forEach (x) -> expect(lmap.testMap.has(x)).to.be true
 
 			lmap.reapStale()
 
 			['freshA', 'freshB', 'freshC']
-			.forEach (x) -> expect(lmap._map.has(x)).to.be true
+			.forEach (x) -> expect(lmap.testMap.has(x)).to.be true
 
 			['staleA', 'staleB', 'staleC']
-			.forEach (x) -> expect(lmap._map.has(x)).to.be false
+			.forEach (x) -> expect(lmap.testMap.has(x)).to.be false
 
-		it 'updates the _total', ->
+		it 'updates the current size', ->
 			lmap = new LRUMap
 
 			for key in ['1', '2', '3', '4', '5', '6']
-				lmap._map.set(key, {
+				lmap.testMap.set(key, {
 					size: 1
 					value: 'hi'
 					timestamp: +(new Date) - (parseInt(key) * 1000)
 				})
 
-			lmap._total = 6
-			lmap._maxAge = 3
+			lmap.testSetTotal 6
+			lmap.testSetMaxAge 3
 			lmap.reapStale()
 
-			expect(lmap._total).to.be 3
+			expect(lmap.currentSize()).to.be 3
 
 		it 'triggers onStale', ->
 			lmap = new LRUMap(maxAge: 3)
-			lmap._map.set 'one', {
+			lmap.testMap.set 'one', {
 				size: 1
 				value: 'hi'
 				timestamp: +(new Date) - 4000
 			}
 
-			lmap._total = 1
+			lmap.testSetTotal 1
 
 			called = false
 			lmap.onStale (key, value) ->
@@ -338,13 +374,13 @@ describe 'LRUMap', ->
 
 		it 'triggers onRemove', ->
 			lmap = new LRUMap(maxAge: 3)
-			lmap._map.set 'one', {
+			lmap.testMap.set 'one', {
 				size: 1
 				value: 'hi'
 				timestamp: +(new Date) - 4000
 			}
 
-			lmap._total = 1
+			lmap.testSetTotal 1
 
 			called = false
 			lmap.onRemove (key, value) ->
@@ -367,8 +403,8 @@ describe 'LRUMap', ->
 				timestamp: staleDate
 			}
 
-			lmap._map.set 'one', entry
-			lmap._total = 1
+			lmap.testMap.set 'one', entry
+			lmap.testSetTotal 1
 
 			lmap.get 'one'
 			expect(entry.timestamp).to.be.greaterThan +(new Date) - 50
@@ -684,15 +720,15 @@ describe 'LRUMap', ->
 
 		it 'updates timestamp iff accessUpdatesTimestamp', ->
 			lmap = new LRUMap accessUpdatesTimestamp: true
-			lmap._map.set 'foo', {
+			lmap.testMap.set 'foo', {
 				size: 1
 				value: 'sup'
 				timestamp: 0
 			}
 
-			lmap._total = 1
+			lmap.testSetTotal 1
 			lmap.get 'foo'
-			expect(lmap._map.get('foo').timestamp).to.be.greaterThan +(new Date) - 1000
+			expect(lmap.testMap.get('foo').timestamp).to.be.greaterThan +(new Date) - 1000
 
 		it 'updates LRU order correctly', ->
 			lmap = new LRUMap
@@ -759,18 +795,18 @@ describe 'LRUMap', ->
 		it 'returns the value without affecting timestamp or LRU order', ->
 			lmap = new LRUMap accessUpdatesTimestamp: true
 
-			lmap._map.set 'one', {
+			lmap.testMap.set 'one', {
 				size: 1
 				value: 1
 				timestamp: 0
 			}
 
-			lmap._total = 1
+			lmap.testSetTotal 1
 			lmap.set 'two', 2
 			lmap.set 'three', 3
 			lmap.peek 'one'
 
-			expect(lmap._map.get('one').timestamp).to.be 0
+			expect(lmap.testMap.get('one').timestamp).to.be 0
 			expect(it2array lmap.keys()).to.eql [
 				'one'
 				'two'
@@ -844,9 +880,9 @@ describe 'LRUMap', ->
 				timestamp: 0
 			}
 
-			lmap._map.set 'foo', foo
-			lmap._map.set 'bar', bar
-			lmap._total = 2
+			lmap.testMap.set 'foo', foo
+			lmap.testMap.set 'bar', bar
+			lmap.testSetTotal 2
 
 			it = lmap.values()
 			expect(foo.timestamp).to.be 0
@@ -874,9 +910,9 @@ describe 'LRUMap', ->
 				timestamp: 0
 			}
 
-			lmap._map.set 'foo', foo
-			lmap._map.set 'bar', bar
-			lmap._total = 2
+			lmap.testMap.set 'foo', foo
+			lmap.testMap.set 'bar', bar
+			lmap.testSetTotal 2
 
 			it = lmap.values()
 			it.next()
@@ -919,9 +955,9 @@ describe 'LRUMap', ->
 				timestamp: 0
 			}
 
-			lmap._map.set 'foo', foo
-			lmap._map.set 'bar', bar
-			lmap._total = 2
+			lmap.testMap.set 'foo', foo
+			lmap.testMap.set 'bar', bar
+			lmap.testSetTotal 2
 
 			it = lmap.entries()
 			expect(foo.timestamp).to.be 0
@@ -949,9 +985,9 @@ describe 'LRUMap', ->
 				timestamp: 0
 			}
 
-			lmap._map.set 'foo', foo
-			lmap._map.set 'bar', bar
-			lmap._total = 2
+			lmap.testMap.set 'foo', foo
+			lmap.testMap.set 'bar', bar
+			lmap.testSetTotal 2
 
 			it = lmap.entries()
 			it.next()
@@ -1016,9 +1052,9 @@ describe 'LRUMap', ->
 				timestamp: 0
 			}
 
-			lmap._map.set 'foo', foo
-			lmap._map.set 'bar', bar
-			lmap._total = 2
+			lmap.testMap.set 'foo', foo
+			lmap.testMap.set 'bar', bar
+			lmap.testSetTotal 2
 			called = 0
 
 			lmap.forEach (value, key) ->
@@ -1048,44 +1084,11 @@ describe 'LRUMap', ->
 				timestamp: 0
 			}
 
-			lmap._map.set 'foo', foo
-			lmap._map.set 'bar', bar
-			lmap._total = 2
+			lmap.testMap.set 'foo', foo
+			lmap.testMap.set 'bar', bar
+			lmap.testSetTotal 2
 			called = 0
 			lmap.forEach (value, key) -> called++
 			expect(called).to.be 2
 			expect(foo.timestamp).to.be 0
 			expect(bar.timestamp).to.be 0
-
-	describe '#_total', ->
-		it 'is correct after basic operations', ->
-			lmap = new LRUMap
-
-			expect(lmap.currentSize()).to.be 0
-
-			lmap.set 'one', 1
-			lmap.set 'two', 1
-			lmap.set 'three', 1
-
-			expect(lmap.currentSize()).to.be 3
-
-			lmap.delete 'one'
-
-			expect(lmap.currentSize()).to.be 2
-
-			lmap.set 'four', 1
-			lmap.set 'five', 1
-
-			expect(lmap.currentSize()).to.be 4
-
-			lmap.maxSize 2
-
-			expect(lmap.currentSize()).to.be 2
-
-			lmap.clear()
-
-			expect(lmap.currentSize()).to.be 0
-
-			lmap.set 'one', 1
-			lmap.set 'two', 1
-			lmap.set 'three', 1
