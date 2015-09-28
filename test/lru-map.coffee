@@ -6,8 +6,6 @@ is necessary even though there are no coffee-jshint reportable errors
 ### jshint maxerr: 100 ###
 
 expect  = require 'expect.js'
-mockery = require 'mockery'
-sinon   = require 'sinon'
 
 Map    = require 'es6-map'
 Symbol = require 'es6-symbol'
