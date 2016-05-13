@@ -10,6 +10,7 @@ expect  = require 'expect.js'
 Map    = require 'es6-map'
 Symbol = require 'es6-symbol'
 LRUMap = require '../src/lru-map'
+Promise = require 'bluebird'
 
 it2array = (it) ->
 	result = []
@@ -337,11 +338,11 @@ describe 'LRUMap', ->
 		it 'updates the current size', ->
 			lmap = new LRUMap
 
-			for key in ['1', '2', '3', '4', '5', '6']
+			for key, i in ['1', '2', '3', '4', '5', '6']
 				lmap.testMap.set(key, {
 					size: 1
 					value: 'hi'
-					timestamp: +(new Date) - (parseInt(key) * 1000)
+					timestamp: +(new Date) - (if i < 3 then 0 else 10000)
 				})
 
 			lmap.testSetTotal 6
@@ -605,6 +606,59 @@ describe 'LRUMap', ->
 				lmap.set 'three', {size: 3}
 				expect(called).to.be 3
 
+	describe '#setIfNull()', ->
+		it 'errors if optTimeout is not a number', ->
+			lmap = new LRUMap
+			expect(-> lmap.setIfNull 'foo', {bar: true}, false).to.throwError /number/i
+
+		it 'errors if optTimeout is less than 1', ->
+			lmap = new LRUMap
+			expect(-> lmap.setIfNull 'foo', {bar: true}, 0.1).to.throwError /positive/i
+
+		it 'returns the inflight promise, if one exists', ->
+			lmap = new LRUMap
+			lmap.testInflights.set 'foo', Promise.resolve({hi: 'mom'})
+
+			lmap.setIfNull('foo', 'bar')
+			.then (value) -> expect(value).to.eql {hi: 'mom'}
+
+		it 'deletes the inflight promise after update succeeds', ->
+			lmap = new LRUMap
+
+			lmap.setIfNull('foo', Promise.resolve()
+				.then(-> expect(lmap.testInflights.has 'foo').to.be true)
+				.then(-> Promise.resolve 'hi mom')
+			).then (value) ->
+				expect(value).to.be 'hi mom'
+				expect(lmap.testInflights.has 'foo').to.be false
+
+		it 'deletes the inflight promise after update fails', ->
+			lmap = new LRUMap
+
+			lmap.setIfNull('foo', Promise.resolve()
+				.then(-> expect(lmap.testInflights.has 'foo').to.be true)
+				.then(-> Promise.reject 'bad times')
+			)
+			.then -> expect().fail 'should have rejected'
+			.catch (err) ->
+				expect(err).to.be 'bad times'
+				expect(lmap.testInflights.has 'foo').to.be false
+
+		it 'returns the existing key, if it exists', ->
+			lmap = new LRUMap
+			lmap.set 'foo', 'baz'
+
+			lmap.setIfNull('foo', 'fizz')
+			.then (value) -> expect(value).to.eql 'baz'
+
+		it 'sets the specified key to the resolved newValue and returns the value', ->
+			lmap = new LRUMap
+
+			lmap.setIfNull('foo', Promise.resolve(do -> 'hello'))
+			.then (value) ->
+				expect(value).to.eql 'hello'
+				expect(lmap.get 'foo').to.eql 'hello'
+
 	describe '#delete()', ->
 		it 'removes the specified key and its value', ->
 			lmap = new LRUMap
@@ -826,6 +880,47 @@ describe 'LRUMap', ->
 			expect(lmap.sizeOf 'foo').to.be 3
 			obj.size = 5
 			expect(lmap.sizeOf 'foo').to.be 3
+
+	describe '#ageOf()', ->
+		it 'returns the age of the specified entry in seconds', ->
+			lmap = new LRUMap
+
+			foo =
+				size: 1
+				timestamp: +(new Date) - (100 * 1000)
+				value: 'hi'
+
+			lmap.testMap.set 'foo', foo
+			lmap.testSetTotal 1
+			expect(lmap.ageOf 'foo').to.be.greaterThan 90
+			expect(lmap.ageOf 'foo').to.be.lessThan 110
+
+	describe '#isStale()', ->
+		it 'returns true if the specified entry is stale', ->
+			lmap = new LRUMap maxAge: 10
+
+			foo =
+				size: 1
+				timestamp: 0
+				value: 'hi'
+
+			lmap.testMap.set 'foo', foo
+			lmap.testSetTotal 1
+
+			expect(lmap.isStale 'foo').to.be true
+
+		it 'returns false if the specified entry is not stale', ->
+			lmap = new LRUMap maxAge: 100
+
+			foo =
+				size: 1
+				timestamp: +(new Date)
+				value: 'hi'
+
+			lmap.testMap.set 'foo', foo
+			lmap.testSetTotal 1
+
+			expect(lmap.isStale 'foo').to.be false
 
 	describe '#keys()', ->
 		it 'reaps stales', ->

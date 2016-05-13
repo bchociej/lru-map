@@ -101,6 +101,17 @@ This method affects the LRU order and staleness timestamp for the entry.
 This method runs as efficiently as the underlying `Map#set()` implementation.
 
 
+### #setIfNull(key, promisedValue, [timeout = 10000])
+
+Atomically check if the `key` exists, returning it if so, and updating with the resolved `promiseValue` if not. Times out in `timeout` milliseconds, which must be a positive number, can be `Infinity`, and defaults to `10000`.
+
+Simultaenous calls to `setIfNull()` with the same `key` will receive a promise for the pending update, which corresponds to the first caller's `promisedValue`. (If the corresponding `promisedValue` is not a promise, i.e. if the entry is synchronously updated, later calls will always receive an immediately resolved promise, as long as the entry is not evicted or stale.)
+
+This method affects the LRU order and staleness timestamp for the entry.
+
+This method runs as efficiently as a `LRUMap#get()` call; if the `key` does not exist, the additional complexity of resolving the `promisedValue` is incurred, as well as the complexity of a call to `LRUMap#set()`
+
+
 ### #delete(key)
 
 Remove the specified `key` (and its associated value) from the map. Because `#delete()` only reduces the size of the map, no eviction can occur. Stale entries are reaped, however. If the key existed in the map when this method was called, it will return `true`; otherwise, it will return `false`.
