@@ -191,6 +191,8 @@ module.exports = class LRUMap
 
 		opts.timeout ?= 10000
 		opts.invokeNewValueFunction ?= true
+		opts.onCacheHit ?= -> undefined
+		opts.onCacheMiss ?= -> undefined
 
 		unless typeof opts.timeout is 'number' and opts.timeout >= 1
 			throw new TypeError 'opts.timeout must be a positive number (possibly Infinity)'
@@ -198,13 +200,23 @@ module.exports = class LRUMap
 		unless typeof opts.invokeNewValueFunction is 'boolean'
 			throw new TypeError 'opts.invokeNewValueFunction must be boolean'
 
+		unless typeof opts.onCacheHit is 'function'
+			throw new TypeError 'opts.onCacheHit must be a function'
+
+		unless typeof opts.onCacheMiss is 'function'
+			throw new TypeError 'opts.onCacheMiss must be a function'
+
 		if _atomicInflights.has key
+			setTimeout -> opts.onCacheHit key
 			return _atomicInflights.get key
 
 		@reapStale()
 
 		if _map.has key
+			setTimeout -> opts.onCacheHit key
 			return Promise.resolve @get key
+
+		setTimeout -> opts.onCacheMiss key
 
 		if opts.invokeNewValueFunction and typeof newValue is 'function'
 			newValue = newValue()

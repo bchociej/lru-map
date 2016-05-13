@@ -619,6 +619,18 @@ describe 'LRUMap', ->
 			lmap = new LRUMap
 			expect(-> lmap.setIfNull 'foo', {bar: true}, {timeout: 0.1}).to.throwError /positive/i
 
+		it 'errors if opts.invokeNewValueFunction is not boolean', ->
+			lmap = new LRUMap
+			expect(-> lmap.setIfNull 'foo', {bar: true}, {invokeNewValueFunction: 0.1}).to.throwError /boolean/i
+
+		it 'errors if opts.onCacheHit is not a function', ->
+			lmap = new LRUMap
+			expect(-> lmap.setIfNull 'foo', {bar: true}, {onCacheHit: 0.1}).to.throwError /function/i
+
+		it 'errors if opts.onCacheMiss is not a function', ->
+			lmap = new LRUMap
+			expect(-> lmap.setIfNull 'foo', {bar: true}, {onCacheMiss: 0.1}).to.throwError /function/i
+
 		it 'returns the inflight promise, if one exists', ->
 			lmap = new LRUMap
 			lmap.testInflights.set 'foo', Promise.resolve({hi: 'mom'})
@@ -672,6 +684,25 @@ describe 'LRUMap', ->
 			lmap = new LRUMap
 			lmap.setIfNull('foo', (-> 'hi'), {invokeNewValueFunction: false})
 			.then (value) -> expect(typeof value).to.be 'function'
+
+		it 'calls opts.onCacheHit when a cache hit occurs', (done) ->
+			lmap = new LRUMap
+			lmap.set('foo', 'bar')
+			lmap.setIfNull('foo', 'bar', {
+				onCacheHit: (key) ->
+					expect(key).to.be 'foo'
+					done()
+				onCacheMiss: -> expect().fail('should have hit')
+			})
+
+		it 'calls opts.onCacheMiss when a cache miss occurs', (done) ->
+			lmap = new LRUMap
+			lmap.setIfNull('foo', 'bar', {
+				onCacheMiss: (key) ->
+					expect(key).to.be 'foo'
+					done()
+				onCacheHit: -> expect().fail('should have missed')
+			})
 
 	describe '#delete()', ->
 		it 'removes the specified key and its value', ->
