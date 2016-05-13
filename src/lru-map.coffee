@@ -185,9 +185,18 @@ module.exports = class LRUMap
 		return this
 
 	# mutates Map state; affects LRU eviction; affects staleness; reaps stales
-	setIfNull: (key, newValue, optTimeout = 10000) ->
-		unless typeof optTimeout is 'number' and optTimeout >= 1
-			throw new TypeError 'optTimeout must be a positive number (possibly Infinity)'
+	setIfNull: (key, newValue, opts = {}) ->
+		unless typeof opts is 'object'
+			throw new TypeError 'opts must be an object'
+
+		opts.timeout ?= 10000
+		opts.invokeNewValueFunction ?= true
+
+		unless typeof opts.timeout is 'number' and opts.timeout >= 1
+			throw new TypeError 'opts.timeout must be a positive number (possibly Infinity)'
+
+		unless typeof opts.invokeNewValueFunction is 'boolean'
+			throw new TypeError 'opts.invokeNewValueFunction must be boolean'
 
 		if _atomicInflights.has key
 			return _atomicInflights.get key
@@ -197,8 +206,11 @@ module.exports = class LRUMap
 		if _map.has key
 			return Promise.resolve @get key
 
+		if opts.invokeNewValueFunction and typeof newValue is 'function'
+			newValue = newValue()
+
 		inflight = Promise.resolve(newValue)
-			.timeout(optTimeout)
+			.timeout(opts.timeout)
 			.tap (value) =>
 				_atomicInflights.delete key
 				@reapStale()

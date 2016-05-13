@@ -607,13 +607,17 @@ describe 'LRUMap', ->
 				expect(called).to.be 3
 
 	describe '#setIfNull()', ->
-		it 'errors if optTimeout is not a number', ->
+		it 'errors if opts is not an object', ->
 			lmap = new LRUMap
-			expect(-> lmap.setIfNull 'foo', {bar: true}, false).to.throwError /number/i
+			expect(-> lmap.setIfNull 'foo', 'bar', false).to.throwError /object/i
 
-		it 'errors if optTimeout is less than 1', ->
+		it 'errors if opts.timeout is not a number', ->
 			lmap = new LRUMap
-			expect(-> lmap.setIfNull 'foo', {bar: true}, 0.1).to.throwError /positive/i
+			expect(-> lmap.setIfNull 'foo', {bar: true}, {timeout: false}).to.throwError /number/i
+
+		it 'errors if opts.timeout is less than 1', ->
+			lmap = new LRUMap
+			expect(-> lmap.setIfNull 'foo', {bar: true}, {timeout: 0.1}).to.throwError /positive/i
 
 		it 'returns the inflight promise, if one exists', ->
 			lmap = new LRUMap
@@ -658,6 +662,16 @@ describe 'LRUMap', ->
 			.then (value) ->
 				expect(value).to.eql 'hello'
 				expect(lmap.get 'foo').to.eql 'hello'
+
+		it 'invokes newValue functions if opts.invokeNewValueFunction is true (default)', ->
+			lmap = new LRUMap
+			lmap.setIfNull('foo', -> 'hi')
+			.then (value) -> expect(value).to.eql 'hi'
+
+		it 'does not invoke newValue functions if opts.invokeNewValueFunction is false', ->
+			lmap = new LRUMap
+			lmap.setIfNull('foo', (-> 'hi'), {invokeNewValueFunction: false})
+			.then (value) -> expect(typeof value).to.be 'function'
 
 	describe '#delete()', ->
 		it 'removes the specified key and its value', ->
