@@ -101,11 +101,13 @@ This method affects the LRU order and staleness timestamp for the entry.
 This method runs as efficiently as the underlying `Map#set()` implementation.
 
 
-### #setIfNull(key, promisedValue, [timeout = 10000])
+### #setIfNull(key, promisedValue, [opts = {}])
 
-Atomically check if the `key` exists, returning it if so, and updating with the resolved `promiseValue` if not. Times out in `timeout` milliseconds, which must be a positive number, can be `Infinity`, and defaults to `10000`.
+Atomically check if the `key` exists, returning it if so, and updating with the resolved `promiseValue` if not. Times out in `opts.timeout` milliseconds, which must be a positive number, can be `Infinity`, and defaults to `10000`.
 
 Simultaenous calls to `setIfNull()` with the same `key` will receive a promise for the pending update, which corresponds to the first caller's `promisedValue`. (If the corresponding `promisedValue` is not a promise, i.e. if the entry is synchronously updated, later calls will always receive an immediately resolved promise, as long as the entry is not evicted or stale.)
+
+If `promisedValue` is a function, it will be evaluated before use unless `opts.invokeNewValueFunction` is `false`.
 
 This method affects the LRU order and staleness timestamp for the entry.
 
