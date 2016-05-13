@@ -1,9 +1,10 @@
 Map = require 'es6-map'
 Symbol = require 'es6-symbol'
+Promise = require 'bluebird'
 
 module.exports = class LRUMap
 	_maxSize = _maxAge = _calcSize = _user_onEvict = _user_onStale = _onRemove = undefined
-	_accessUpdatesTimestamp = _onEvict = _onStale = _map = _total = undefined
+	_accessUpdatesTimestamp = _onEvict = _onStale = _map = _total = _atomicInflights = undefined
 
 	constructor: (opts = {}) ->
 		_maxSize = opts.maxSize ? (Infinity)
@@ -37,6 +38,8 @@ module.exports = class LRUMap
 			_onRemove(key, value)
 			_user_onStale(key, value)
 
+
+		_atomicInflights = new Map
 		_map = new Map
 		_total = 0
 
@@ -44,6 +47,7 @@ module.exports = class LRUMap
 
 		if LRUMap.__testing__ is true
 			@testMap = _map
+			@testInflights = _atomicInflights
 			@testSetTotal = (x) -> _total = x
 			@testSetMaxAge = (x) -> _maxAge = x
 
@@ -181,6 +185,32 @@ module.exports = class LRUMap
 		return this
 
 	# mutates Map state; affects LRU eviction; affects staleness; reaps stales
+	setIfNull: (key, newValue, optTimeout = 10000) ->
+		unless typeof optTimeout is 'number' and optTimeout >= 1
+			throw new TypeError 'optTimeout must be a positive number (possibly Infinity)'
+
+		if _atomicInflights.has key
+			return _atomicInflights.get key
+
+		@reapStale()
+
+		if _map.has key
+			return Promise.resolve @get key
+
+		inflight = Promise.resolve(newValue)
+			.timeout(optTimeout)
+			.tap (value) =>
+				_atomicInflights.delete key
+				@reapStale()
+				@set key, value
+			.catch (e) ->
+				_atomicInflights.delete key
+				Promise.reject e
+
+		_atomicInflights.set key, inflight
+		return inflight
+
+	# mutates Map state; affects LRU eviction; affects staleness; reaps stales
 	delete: (key) ->
 		if _map.has key
 			_total -= @sizeOf key
@@ -227,6 +257,20 @@ module.exports = class LRUMap
 	sizeOf: (key) ->
 		entry = _map.get key
 		return entry?.size
+
+	# non-mutating; idempotent
+	ageOf: (key) ->
+		entry = _map.get key
+
+		if entry?
+			return Math.round((+(new Date) - entry.timestamp) / 1000)
+
+	# non-mutating; idempotent
+	isStale: (key) ->
+		entry = _map.get key
+
+		if entry?
+			return @ageOf(key) > _maxAge
 
 	# non-evicting; reaps stales
 	keys: ->
