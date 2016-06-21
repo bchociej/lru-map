@@ -36,8 +36,14 @@ Construct a new LRUMap with the specified `options` (an object):
 * `onStale`: a callback `function(key, value)` that is called when an entry is removed as stale (too old)
 * `onRemove`: a callback that occurs when either `onEvict` or `onStale` is called; same signature
 * `accessUpdatesTimestamp`: true/false; do you want the act of accessing an entry to update its timestamp for `maxAge` staleness calculations? If not, the entry will age out based on when it was last `set()` (inserted) into the LRUMap. Default `false`.
+* `warmer`: a callback `function(lrumap)` that is called to pre-populate the cache.  The function will not be called initially.  See the warm function for more details.
 
 Note that even if you take great care to write a `calcSize` function that computes a byte size for entries, each entry still carries some overhead in the LRUMap implementation.
+
+
+### #warm()
+
+Calles the warmer function, and waits for it to finish. Returns a promise which will be resolved when the warmer is done.  If the warmer function returns a promise, that will be waited on as well.
 
 
 ### #maxAge([age])
