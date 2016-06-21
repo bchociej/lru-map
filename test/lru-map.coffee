@@ -64,6 +64,11 @@ describe 'LRUMap', ->
 				new LRUMap(onRemove: true)
 			).to.throwError /onRemove.*function/
 
+		it 'errors when warmer is not a function', ->
+			expect(->
+				new LRUMap(warmer: true)
+			).to.throwError /warmer.*function/
+
 	describe '#maxAge', ->
 		it 'gets and sets maxAge', ->
 			expect(new LRUMap().maxAge()).to.be Infinity
@@ -126,6 +131,28 @@ describe 'LRUMap', ->
 
 			expect(lmap.has('three')).to.be true
 			expect(lmap.has('one') or lmap.has('two')).to.be false
+
+	describe '#warm()', ->
+		it 'should run the warmer function only once on the first call', (done) ->
+			warmerRun = false
+			warmer    = (cache) -> warmerRun = true
+
+			lmap = new LRUMap({warmer})
+
+			expect(warmerRun).to.be false
+
+			lmap.warm()
+			.then ->
+				expect(warmerRun).to.be true
+
+				warmerRun = false
+
+				lmap.warm()
+			.then ->
+				expect(warmerRun).to.be false
+
+				done()
+			.catch done
 
 	describe '#currentSize()', ->
 		it 'reports the current size', ->

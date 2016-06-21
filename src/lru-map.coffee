@@ -3,7 +3,7 @@ Symbol = require 'es6-symbol'
 Promise = require 'bluebird'
 
 module.exports = class LRUMap
-	_maxSize = _maxAge = _calcSize = _user_onEvict = _user_onStale = _onRemove = undefined
+	_maxSize = _maxAge = _calcSize = _user_onEvict = _user_onStale = _onRemove = _warmer = _warmed = undefined
 	_accessUpdatesTimestamp = _onEvict = _onStale = _map = _total = _atomicInflights = undefined
 
 	constructor: (opts = {}) ->
@@ -14,6 +14,7 @@ module.exports = class LRUMap
 		_user_onStale = opts.onStale ? ((key, value) -> undefined)
 		_onRemove = opts.onRemove ? ((key, value) -> undefined)
 		_accessUpdatesTimestamp = opts.accessUpdatesTimestamp ? false
+		_warmer = opts.warmer ? (cache) -> Promise.resolve()
 
 		unless typeof _maxSize is 'number' and _maxSize >= 0
 			throw new Error 'maxSize must be a non-negative number'
@@ -30,6 +31,9 @@ module.exports = class LRUMap
 		unless typeof _onRemove is 'function'
 			throw new TypeError 'onRemove must be a function'
 
+		unless typeof _warmer is 'function'
+			throw new TypeError 'warmer must be a function'
+
 		_onEvict = (key, value) ->
 			_onRemove(key, value)
 			_user_onEvict(key, value)
@@ -37,7 +41,6 @@ module.exports = class LRUMap
 		_onStale = (key, value) ->
 			_onRemove(key, value)
 			_user_onStale(key, value)
-
 
 		_atomicInflights = new Map
 		_map = new Map
@@ -95,6 +98,11 @@ module.exports = class LRUMap
 				_onEvict oldest[0], oldest[1].value
 
 		return _maxSize
+
+	# returns a promise that will be fulfilled when the cache is done warming
+	warm: ->
+		unless _warmed? then _warmed = Promise.resolve(_warmer(this))
+		return _warmed
 
 	# non-mutating; idempotent
 	currentSize: ->
