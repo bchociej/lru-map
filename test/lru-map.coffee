@@ -39,6 +39,11 @@ describe 'LRUMap', ->
 		it 'constructs an LRUMap', ->
 			expect(new LRUMap).to.be.an LRUMap
 
+		it 'constructs LRUMaps with distinct underlying Maps', ->
+			foo = new LRUMap
+			bar = new LRUMap
+			expect(foo.getTestMap()).not.to.be bar.getTestMap()
+
 		it 'errors when maxSize is negative', ->
 			expect(->
 				new LRUMap(maxSize: -1)
